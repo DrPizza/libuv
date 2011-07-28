@@ -149,7 +149,7 @@ static void pinger_read_cb(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
     if (pinger->state == 0) {
       pinger->pongs++;
       if (uv_now() - start_time > TIME) {
-        uv_shutdown(&pinger->shutdown_req, (uv_stream_t*) tcp, pinger_shutdown_cb);
+        uv_shutdown(&pinger->shutdown_req, (uv_network_stream_t*) tcp, pinger_shutdown_cb);
         break;
       } else {
         pinger_write_ping(pinger);
@@ -168,7 +168,7 @@ static void pinger_connect_cb(uv_connect_t* req, int status) {
 
   pinger_write_ping(pinger);
 
-  if (uv_read_start(req->handle, buf_alloc, pinger_read_cb)) {
+  if (uv_read_start((uv_stream_t*)req->handle, buf_alloc, pinger_read_cb)) {
     FATAL("uv_read_start failed");
   }
 }

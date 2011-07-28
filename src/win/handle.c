@@ -43,6 +43,7 @@ int uv_is_active(uv_handle_t* handle) {
 static void uv_close_error(uv_handle_t* handle, uv_err_t e) {
   uv_tcp_t* tcp;
   uv_pipe_t* pipe;
+  uv_file_t* file;
 
   if (handle->flags & UV_HANDLE_CLOSING) {
     return;
@@ -73,6 +74,14 @@ static void uv_close_error(uv_handle_t* handle, uv_err_t e) {
       pipe->flags &= ~(UV_HANDLE_READING | UV_HANDLE_LISTENING);
       close_pipe(pipe, NULL, NULL);
       if (pipe->reqs_pending == 0) {
+        uv_want_endgame(handle);
+      }
+      return;
+
+    case UV_FILE:
+      file = (uv_file_t*)handle;
+      close_file(file, NULL, NULL);
+      if(file->reqs_pending == 0) {
         uv_want_endgame(handle);
       }
       return;
@@ -142,6 +151,10 @@ void uv_process_endgames() {
 
       case UV_NAMED_PIPE:
         uv_pipe_endgame((uv_pipe_t*)handle);
+        break;
+
+      case UV_FILE:
+        uv_file_endgame((uv_file_t*)handle);
         break;
 
       case UV_TIMER:

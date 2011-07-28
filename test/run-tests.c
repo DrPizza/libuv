@@ -30,12 +30,10 @@
 
 
 /* The time in milliseconds after which a single test times out. */
-#define TEST_TIMEOUT  5000
+#define TEST_TIMEOUT  25000
 
 
 int main(int argc, char **argv) {
-  int i;
-
   platform_init(argc, argv);
 
   switch (argc) {

@@ -109,7 +109,7 @@ static DWORD WINAPI getaddrinfo_thread_proc(void* parameter) {
  * and copy all structs and referenced strings into the one block.
  * Each size calculation is adjusted to avoid unaligned pointers.
  */
-void uv_process_getaddrinfo_req(uv_getaddrinfo_t* handle, uv_req_t* req) {
+void uv_process_getaddrinfo_req(uv_getaddrinfo_t* handle, uv_getaddrinfo_req_t* req) {
   int addrinfo_len = 0;
   int name_len = 0;
   size_t addrinfo_struct_len = ALIGNED_SIZE(sizeof(struct addrinfo));
@@ -320,7 +320,7 @@ int uv_getaddrinfo(uv_getaddrinfo_t* handle,
 
   /* init request for Post handling */
   uv_req_init(&handle->getadddrinfo_req);
-  handle->getadddrinfo_req.data = handle;
+  handle->getadddrinfo_req.handle = (uv_handle_t*)handle;
   handle->getadddrinfo_req.type = UV_GETADDRINFO_REQ;
 
   /* Ask thread to run. Treat this as a long operation */

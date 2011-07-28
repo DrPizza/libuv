@@ -62,15 +62,15 @@ static void after_read(uv_stream_t* handle, ssize_t nread, uv_buf_t buf) {
   }
 
   req = (uv_shutdown_t*) malloc(sizeof *req);
-  r = uv_shutdown(req, handle, after_shutdown);
+  r = uv_shutdown(req, (uv_network_stream_t*)handle, after_shutdown);
   ASSERT(r == 0);
 }
 
 
-static void on_connection(uv_stream_t* server, int status) {
+static void on_connection(uv_network_stream_t* server, int status) {
   struct sockaddr sockname;
   int namelen = sizeof(sockname);
-  uv_handle_t* handle;
+  uv_tcp_t* handle;
   int r;
 
   if (status != 0) {
@@ -78,7 +78,7 @@ static void on_connection(uv_stream_t* server, int status) {
   }
   ASSERT(status == 0);
 
-  handle = (uv_handle_t*) malloc(sizeof(uv_tcp_t));
+  handle = malloc(sizeof(uv_tcp_t));
   ASSERT(handle != NULL);
 
   uv_tcp_init((uv_tcp_t*)handle);
@@ -86,7 +86,7 @@ static void on_connection(uv_stream_t* server, int status) {
   /* associate server with stream */
   handle->data = server;
 
-  r = uv_accept(server, (uv_stream_t*)handle);
+  r = uv_accept(server, (uv_network_stream_t*)handle);
   ASSERT(r == 0);
 
   status = uv_getsockname((uv_tcp_t*)handle, &sockname, &namelen);
@@ -141,7 +141,7 @@ static int tcp_listener(int port) {
     return 1;
   }
 
-  r = uv_listen((uv_stream_t*)&tcpServer, 128, on_connection);
+  r = uv_listen((uv_network_stream_t*)&tcpServer, 128, on_connection);
   if (r) {
     fprintf(stderr, "Listen error\n");
     return 1;

@@ -31,7 +31,7 @@
  */
 struct uv_ares_action_s {
   UV_HANDLE_FIELDS
-  struct uv_req_s ares_req;
+  struct uv_ares_action_req_s ares_req;
   SOCKET sock;
   int read;
   int write;
@@ -60,7 +60,7 @@ static void CALLBACK uv_ares_socksignal_tp(void* parameter, BOOLEAN timerfired) 
   WSANETWORKEVENTS network_events;
   uv_ares_task_t* sockhandle;
   uv_ares_action_t* selhandle;
-  uv_req_t* uv_ares_req;
+  uv_ares_action_req_t* uv_ares_req;
 
   assert(parameter != NULL);
 
@@ -87,9 +87,9 @@ static void CALLBACK uv_ares_socksignal_tp(void* parameter, BOOLEAN timerfired) 
     selhandle->write = (network_events.lNetworkEvents & (FD_WRITE | FD_CONNECT)) ? 1 : 0;
 
     uv_ares_req = &selhandle->ares_req;
-    uv_req_init(uv_ares_req);
+    uv_req_init((uv_req_t*)uv_ares_req);
     uv_ares_req->type = UV_ARES_EVENT_REQ;
-    uv_ares_req->data = selhandle;
+    uv_ares_req->handle = (uv_handle_t*)selhandle;
 
     /* post ares needs to called */
     if (!PostQueuedCompletionStatus(LOOP->iocp,
@@ -123,7 +123,7 @@ static void uv_ares_sockstate_cb(void *data, ares_socket_t sock, int read, int w
     /* The code assumes that c-ares does a callback with read = 0 and write = 0
        when the socket is closed. After we recieve this we stop monitoring the socket. */
     if (uv_handle_ares != NULL) {
-      uv_req_t* uv_ares_req;
+      uv_ares_task_req_t* uv_ares_req;
 
       uv_handle_ares->h_close_event = CreateEvent(NULL, FALSE, FALSE, NULL);
       /* remove Wait */
@@ -143,9 +143,9 @@ static void uv_ares_sockstate_cb(void *data, ares_socket_t sock, int read, int w
 
       /* Post request to cleanup the Task */
       uv_ares_req = &uv_handle_ares->ares_req;
-      uv_req_init(uv_ares_req);
+      uv_req_init((uv_req_t*)uv_ares_req);
       uv_ares_req->type = UV_ARES_CLEANUP_REQ;
-      uv_ares_req->data = uv_handle_ares;
+      uv_ares_req->handle = (uv_handle_t*)uv_handle_ares;
 
       /* post ares done with socket - finish cleanup when all threads done. */
       if (!PostQueuedCompletionStatus(LOOP->iocp,
@@ -221,7 +221,7 @@ static void uv_ares_sockstate_cb(void *data, ares_socket_t sock, int read, int w
 
 
 /* called via uv_poll when ares completion port signaled */
-void uv_process_ares_event_req(uv_ares_action_t* handle, uv_req_t* req) {
+void uv_process_ares_event_req(uv_ares_action_t* handle, uv_ares_action_req_t* req) {
   uv_ares_channel_t* uv_ares_data_ptr = (uv_ares_channel_t*)handle->data;
 
   ares_process_fd(uv_ares_data_ptr->channel,
@@ -234,7 +234,7 @@ void uv_process_ares_event_req(uv_ares_action_t* handle, uv_req_t* req) {
 
 
 /* called via uv_poll when ares is finished with socket */
-void uv_process_ares_cleanup_req(uv_ares_task_t* handle, uv_req_t* req) {
+void uv_process_ares_cleanup_req(uv_ares_task_t* handle, uv_ares_task_req_t* req) {
   /* check for event complete without waiting */
   unsigned int signaled = WaitForSingleObject(handle->h_close_event, 0);
 

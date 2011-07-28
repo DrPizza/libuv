@@ -154,7 +154,7 @@ static void connect_cb(uv_connect_t* req, int status) {
   /* Shutdown on drain. FIXME: dealloc req? */
   shutdown_req = malloc(sizeof(uv_shutdown_t));
   ASSERT(shutdown_req != NULL);
-  r = uv_shutdown(shutdown_req, (uv_stream_t*)tcp, shutdown_cb);
+  r = uv_shutdown(shutdown_req, (uv_network_stream_t*)tcp, shutdown_cb);
   ASSERT(r == 0);
 
   /* Start reading */

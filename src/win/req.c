@@ -72,22 +72,41 @@ static uv_req_t* uv_remove_pending_req() {
 }
 
 
-#define DELEGATE_STREAM_REQ(req, method, handle_at)                           \
-  do {                                                                        \
-    switch (((uv_handle_t*) (req)->handle_at)->type) {                        \
-      case UV_TCP:                                                            \
-        uv_process_tcp_##method##_req((uv_tcp_t*) ((req)->handle_at), req);   \
-        break;                                                                \
-                                                                              \
-      case UV_NAMED_PIPE:                                                     \
-        uv_process_pipe_##method##_req((uv_pipe_t*) ((req)->handle_at), req); \
-        break;                                                                \
-                                                                              \
-      default:                                                                \
-        assert(0);                                                            \
-    }                                                                         \
+#define DELEGATE_STREAM_REQ(req, method)                                   \
+  do {                                                                     \
+    switch (((uv_handle_t*) (req)->handle)->type) {                        \
+      case UV_TCP:                                                         \
+        uv_process_tcp_##method##_req((uv_tcp_t*) ((req)->handle), req);   \
+        break;                                                             \
+                                                                           \
+      case UV_NAMED_PIPE:                                                  \
+        uv_process_pipe_##method##_req((uv_pipe_t*) ((req)->handle), req); \
+        break;                                                             \
+                                                                           \
+      case UV_FILE:                                                        \
+        uv_process_file_##method##_req((uv_file_t*) ((req)->handle), req); \
+        break;                                                             \
+                                                                           \
+      default:                                                             \
+        assert(0);                                                         \
+    }                                                                      \
   } while (0)
 
+#define DELEGATE_NETWORK_STREAM_REQ(req, method)                           \
+  do {                                                                     \
+    switch (((uv_handle_t*) (req)->handle)->type) {                        \
+      case UV_TCP:                                                         \
+        uv_process_tcp_##method##_req((uv_tcp_t*) ((req)->handle), req);   \
+        break;                                                             \
+                                                                           \
+      case UV_NAMED_PIPE:                                                  \
+        uv_process_pipe_##method##_req((uv_pipe_t*) ((req)->handle), req); \
+        break;                                                             \
+                                                                           \
+      default:                                                             \
+        assert(0);                                                         \
+    }                                                                      \
+  } while (0)
 
 void uv_process_reqs() {
   uv_req_t* req;
@@ -95,35 +114,35 @@ void uv_process_reqs() {
   while (req = uv_remove_pending_req()) {
     switch (req->type) {
       case UV_READ:
-        DELEGATE_STREAM_REQ(req, read, data);
+        DELEGATE_STREAM_REQ((uv_read_t*) req, read);
         break;
 
       case UV_WRITE:
-        DELEGATE_STREAM_REQ((uv_write_t*) req, write, handle);
+        DELEGATE_STREAM_REQ((uv_write_t*) req, write);
         break;
 
       case UV_ACCEPT:
-        DELEGATE_STREAM_REQ(req, accept, data);
+        DELEGATE_NETWORK_STREAM_REQ((uv_accept_t*) req, accept);
         break;
 
       case UV_CONNECT:
-        DELEGATE_STREAM_REQ((uv_connect_t*) req, connect, handle);
+        DELEGATE_NETWORK_STREAM_REQ((uv_connect_t*) req, connect);
         break;
 
       case UV_WAKEUP:
-        uv_process_async_wakeup_req((uv_async_t*) req->data, req);
+        uv_process_async_wakeup_req((uv_async_t*) ((uv_wakeup_req_t*)req)->handle, (uv_wakeup_req_t*)req);
         break;
 
       case UV_ARES_EVENT_REQ:
-        uv_process_ares_event_req((uv_ares_action_t*) req->data, req);
+        uv_process_ares_event_req((uv_ares_action_t*) ((uv_ares_action_req_t*)req)->handle, (uv_ares_action_req_t*)req);
         break;
 
       case UV_ARES_CLEANUP_REQ:
-        uv_process_ares_cleanup_req((uv_ares_task_t*) req->data, req);
+        uv_process_ares_cleanup_req((uv_ares_task_t*) ((uv_ares_task_req_t*)req)->handle, (uv_ares_task_req_t*)req);
         break;
 
       case UV_GETADDRINFO_REQ:
-        uv_process_getaddrinfo_req((uv_getaddrinfo_t*) req->data, req);
+        uv_process_getaddrinfo_req((uv_getaddrinfo_t*) ((uv_getaddrinfo_req_t*)req)->handle, (uv_getaddrinfo_req_t*)req);
         break;
 
       default:

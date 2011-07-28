@@ -103,7 +103,7 @@ static void connect_cb(uv_connect_t *req, int status) {
   uv_write(&write_req, (uv_stream_t*) &tcp, &qbuf, 1, NULL);
 
   /* Shutdown our end of the connection.  */
-  uv_shutdown(&shutdown_req, (uv_stream_t*) &tcp, shutdown_cb);
+  uv_shutdown(&shutdown_req, (uv_network_stream_t*) &tcp, shutdown_cb);
 
   called_connect_cb++;
   ASSERT(called_shutdown_cb == 0);

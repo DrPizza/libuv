@@ -134,7 +134,9 @@ void uv_process_reqs();
  * Streams
  */
 void uv_stream_init(uv_stream_t* handle);
-void uv_connection_init(uv_stream_t* handle);
+void uv_network_stream_init(uv_network_stream_t* handle);
+void uv_seekable_stream_init(uv_seekable_stream_t* handle);
+void uv_connection_init(uv_network_stream_t* handle);
 
 size_t uv_count_bufs(uv_buf_t bufs[], int count);
 
@@ -149,13 +151,13 @@ void uv_tcp_endgame(uv_tcp_t* handle);
 int uv_tcp_listen(uv_tcp_t* handle, int backlog, uv_connection_cb cb);
 int uv_tcp_accept(uv_tcp_t* server, uv_tcp_t* client);
 int uv_tcp_read_start(uv_tcp_t* handle, uv_alloc_cb alloc_cb,
-    uv_read_cb read_cb);
+    uv_stream_read_cb read_cb);
 int uv_tcp_write(uv_write_t* req, uv_tcp_t* handle, uv_buf_t bufs[],
     int bufcnt, uv_write_cb cb);
 
-void uv_process_tcp_read_req(uv_tcp_t* handle, uv_req_t* req);
+void uv_process_tcp_read_req(uv_tcp_t* handle, uv_read_t* req);
 void uv_process_tcp_write_req(uv_tcp_t* handle, uv_write_t* req);
-void uv_process_tcp_accept_req(uv_tcp_t* handle, uv_req_t* req);
+void uv_process_tcp_accept_req(uv_tcp_t* handle, uv_accept_t* req);
 void uv_process_tcp_connect_req(uv_tcp_t* handle, uv_connect_t* req);
 
 
@@ -169,14 +171,49 @@ void uv_pipe_endgame(uv_pipe_t* handle);
 int uv_pipe_listen(uv_pipe_t* handle, int backlog, uv_connection_cb cb);
 int uv_pipe_accept(uv_pipe_t* server, uv_pipe_t* client);
 int uv_pipe_read_start(uv_pipe_t* handle, uv_alloc_cb alloc_cb,
-    uv_read_cb read_cb);
+    uv_stream_read_cb read_cb);
 int uv_pipe_write(uv_write_t* req, uv_pipe_t* handle, uv_buf_t bufs[],
     int bufcnt, uv_write_cb cb);
 
-void uv_process_pipe_read_req(uv_pipe_t* handle, uv_req_t* req);
+void uv_process_pipe_read_req(uv_pipe_t* handle, uv_read_t* req);
 void uv_process_pipe_write_req(uv_pipe_t* handle, uv_write_t* req);
-void uv_process_pipe_accept_req(uv_pipe_t* handle, uv_req_t* raw_req);
+void uv_process_pipe_accept_req(uv_pipe_t* handle, uv_accept_t* raw_req);
 void uv_process_pipe_connect_req(uv_pipe_t* handle, uv_connect_t* req);
+
+/*
+ * Files
+ */
+void close_file(uv_file_t* handle, int* status, uv_err_t* err);
+void uv_file_endgame(uv_file_t* handle);
+
+int uv_file_read(uv_read_t* req,
+                 uv_file_t* file,
+                 uv_buf_t bufs[],
+                 int bufcnt,
+                 uv_read_cb read_cb);
+int uv_file_read_offset(uv_read_t* req,
+                        uv_file_t* file,
+                        ssize_t offset,
+                        uv_offset_disposition disposition,
+                        uv_buf_t bufs[],
+                        int bufcnt,
+                        uv_read_cb read_cb);
+int uv_file_write(uv_write_t* req,
+                  uv_file_t* file,
+                  uv_buf_t bufs[],
+                  int bufcnt,
+                  uv_write_cb cb);
+int uv_file_write_offset(uv_write_t* req,
+                         uv_file_t* file,
+                         ssize_t offset,
+                         uv_offset_disposition disposition,
+                         uv_buf_t bufs[],
+                         int bufcnt,
+                         uv_write_cb cb);
+
+void uv_process_file_read_req(uv_file_t* handle, uv_read_t* req);
+void uv_process_file_write_req(uv_file_t* handle, uv_write_t* req);
+
 
 /*
  * Loop watchers
@@ -193,7 +230,7 @@ void uv_idle_invoke();
  */
 void uv_async_endgame(uv_async_t* handle);
 
-void uv_process_async_wakeup_req(uv_async_t* handle, uv_req_t* req);
+void uv_process_async_wakeup_req(uv_async_t* handle, uv_wakeup_req_t* req);
 
 
 /*
@@ -201,13 +238,13 @@ void uv_process_async_wakeup_req(uv_async_t* handle, uv_req_t* req);
  */
 typedef struct uv_ares_action_s uv_ares_action_t;
 
-void uv_process_ares_event_req(uv_ares_action_t* handle, uv_req_t* req);
-void uv_process_ares_cleanup_req(uv_ares_task_t* handle, uv_req_t* req);
+void uv_process_ares_event_req(uv_ares_action_t* handle, uv_ares_action_req_t* req);
+void uv_process_ares_cleanup_req(uv_ares_task_t* handle, uv_ares_task_req_t* req);
 
 /*
  * Getaddrinfo
  */
-void uv_process_getaddrinfo_req(uv_getaddrinfo_t* handle, uv_req_t* req);
+void uv_process_getaddrinfo_req(uv_getaddrinfo_t* handle, uv_getaddrinfo_req_t* req);
 
 
 /*

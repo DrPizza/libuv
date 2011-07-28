@@ -84,7 +84,7 @@ int uv_async_init(uv_async_t* handle, uv_async_cb async_cb) {
   req = &handle->async_req;
   uv_req_init(req);
   req->type = UV_WAKEUP;
-  req->data = handle;
+  req->handle = (uv_handle_t*)handle;
 
   uv_ref();
 
@@ -115,7 +115,7 @@ int uv_async_send(uv_async_t* handle) {
 }
 
 
-void uv_process_async_wakeup_req(uv_async_t* handle, uv_req_t* req) {
+void uv_process_async_wakeup_req(uv_async_t* handle, uv_wakeup_req_t* req) {
   assert(handle->type == UV_ASYNC);
   assert(req->type == UV_WAKEUP);
 

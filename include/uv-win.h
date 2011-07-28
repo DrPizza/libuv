@@ -42,18 +42,24 @@ typedef struct uv_buf_t {
   char* base;
 } uv_buf_t;
 
+typedef HANDLE uv_native_file_t;
+
 #define UV_REQ_PRIVATE_FIELDS             \
-  union {                                 \
-    /* Used by I/O operations */          \
-    struct {                              \
-      OVERLAPPED overlapped;              \
-      size_t queued_bytes;                \
-    };                                    \
-  };                                      \
+  OVERLAPPED overlapped;                  \
+  size_t queued_bytes;                    \
   uv_err_t error;                         \
   struct uv_req_s* next_req;
 
+#define UV_STREAM_REQ_PRIVATE_FIELDS      \
+  /* empty */
+
 #define UV_WRITE_PRIVATE_FIELDS           \
+  /* empty */
+
+#define UV_READ_PRIVATE_FIELDS            \
+  /* empty */
+
+#define UV_ACCEPT_PRIVATE_FIELDS          \
   /* empty */
 
 #define UV_CONNECT_PRIVATE_FIELDS         \
@@ -62,15 +68,31 @@ typedef struct uv_buf_t {
 #define UV_SHUTDOWN_PRIVATE_FIELDS        \
   /* empty */
 
+#define UV_ARES_REQ_PRIVATE_FIELDS        \
+  /* empty */
+
+#define UV_ARES_ACTION_REQ_PRIVATE_FIELDS \
+  /* empty */
+
+#define UV_ARES_TASK_REQ_PRIVATE_FIELDS   \
+  /* empty */
+
+#define UV_WAKEUP_REQ_PRIVATE_FIELDS      \
+  /* empty */
+
+#define UV_GETADDRINFO_REQ_PRIVATE_FIELDS \
+  /* empty */
+
 #define UV_PRIVATE_REQ_TYPES              \
   typedef struct uv_pipe_accept_s {       \
     UV_REQ_FIELDS                         \
+    UV_STREAM_REQ_FIELDS                  \
+    UV_ACCEPT_FIELDS                      \
     HANDLE pipeHandle;                    \
     struct uv_pipe_accept_s* next_pending; \
   } uv_pipe_accept_t;
 
 #define uv_stream_connection_fields       \
-  unsigned int write_reqs_pending;        \
   uv_shutdown_t* shutdown_req;
 
 #define uv_stream_server_fields           \
@@ -78,9 +100,13 @@ typedef struct uv_buf_t {
 
 #define UV_STREAM_PRIVATE_FIELDS          \
   unsigned int reqs_pending;              \
+  unsigned int read_reqs_pending;         \
+  unsigned int write_reqs_pending;        
+
+#define UV_NETWORK_STREAM_PRIVATE_FIELDS  \
   uv_alloc_cb alloc_cb;                   \
-  uv_read_cb read_cb;                     \
-  uv_req_t read_req;                      \
+  uv_stream_read_cb read_cb;              \
+  uv_read_t read_req;                     \
   union {                                 \
     struct { uv_stream_connection_fields };  \
     struct { uv_stream_server_fields     };  \
@@ -93,7 +119,7 @@ typedef struct uv_buf_t {
   };                                      \
   SOCKET accept_socket;                   \
   char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32]; \
-  struct uv_req_s accept_req;             \
+  struct uv_accept_s accept_req;          \
 
 #define uv_pipe_server_fields             \
     uv_pipe_accept_t accept_reqs[4];      \
@@ -108,6 +134,11 @@ typedef struct uv_buf_t {
     struct { uv_pipe_server_fields };     \
     struct { uv_pipe_connection_fields }; \
   };
+
+#define UV_FILE_PRIVATE_FIELDS            \
+  size_t read_queue_size;                 \
+  HANDLE handle;                          \
+  LARGE_INTEGER file_pointer;
 
 #define UV_TIMER_PRIVATE_FIELDS           \
   RB_ENTRY(uv_timer_s) tree_entry;        \
@@ -142,7 +173,7 @@ typedef struct uv_buf_t {
   uv_err_t error;
 
 #define UV_ARES_TASK_PRIVATE_FIELDS       \
-  struct uv_req_s ares_req;               \
+  struct uv_ares_task_req_s ares_req;     \
   SOCKET sock;                            \
   HANDLE h_wait;                          \
   WSAEVENT h_event;                       \

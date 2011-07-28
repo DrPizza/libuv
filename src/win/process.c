@@ -28,9 +28,11 @@
 
 int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   assert(0 && "implement me");
+  return 0;
 }
 
 
 int uv_process_kill(uv_process_t* process, int signum) {
   assert(0 && "implement me");
+  return 0;
 }

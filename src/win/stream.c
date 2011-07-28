@@ -38,17 +38,17 @@ void uv_stream_init(uv_stream_t* handle) {
 }
 
 
-void uv_connection_init(uv_stream_t* handle) {
+void uv_connection_init(uv_network_stream_t* handle) {
   handle->flags |= UV_HANDLE_CONNECTION;
   handle->write_reqs_pending = 0;
 
   uv_req_init((uv_req_t*) &(handle->read_req));
   handle->read_req.type = UV_READ;
-  handle->read_req.data = handle;
+  handle->read_req.handle = (uv_handle_t*)handle;
 }
 
 
-int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
+int uv_listen(uv_network_stream_t* stream, int backlog, uv_connection_cb cb) {
   switch (stream->type) {
     case UV_TCP:
       return uv_tcp_listen((uv_tcp_t*)stream, backlog, cb);
@@ -61,7 +61,7 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
 }
 
 
-int uv_accept(uv_stream_t* server, uv_stream_t* client) {
+int uv_accept(uv_network_stream_t* server, uv_network_stream_t* client) {
   assert(client->type == server->type);
 
   switch (server->type) {
@@ -76,7 +76,7 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
 }
 
 
-int uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb, uv_read_cb read_cb) {
+int uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb, uv_stream_read_cb read_cb) {
   switch (handle->type) {
     case UV_TCP:
       return uv_tcp_read_start((uv_tcp_t*)handle, alloc_cb, read_cb);
@@ -103,6 +103,8 @@ int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
       return uv_tcp_write(req, (uv_tcp_t*) handle, bufs, bufcnt, cb);
     case UV_NAMED_PIPE:
       return uv_pipe_write(req, (uv_pipe_t*) handle, bufs, bufcnt, cb);
+    case UV_FILE:
+      return uv_file_write(req, (uv_file_t*) handle, bufs, bufcnt, cb);
     default:
       assert(0);
       uv_set_sys_error(WSAEINVAL);
@@ -111,7 +113,7 @@ int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
 }
 
 
-int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb) {
+int uv_shutdown(uv_shutdown_t* req, uv_network_stream_t* handle, uv_shutdown_cb cb) {
   if (!(handle->flags & UV_HANDLE_CONNECTION)) {
     uv_set_sys_error(WSAEINVAL);
     return -1;
@@ -124,7 +126,7 @@ int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb) {
 
   uv_req_init((uv_req_t*) req);
   req->type = UV_SHUTDOWN;
-  req->handle = handle;
+  req->handle = (uv_handle_t*)handle;
   req->cb = cb;
 
   handle->flags |= UV_HANDLE_SHUTTING;

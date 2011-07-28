@@ -100,7 +100,7 @@ static void read_cb(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
 
     puts("Shutdown");
 
-    if (uv_shutdown(&shutdown_req, (uv_stream_t*)tcp, shutdown_cb)) {
+    if (uv_shutdown(&shutdown_req, (uv_network_stream_t*)tcp, shutdown_cb)) {
       FATAL("uv_shutdown failed");
     }
     nested--;
