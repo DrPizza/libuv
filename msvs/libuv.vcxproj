@@ -114,21 +114,12 @@
     </Lib>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ProjectReference Include="c-ares.vcxproj">
-      <Project>{2b6a4644-eba9-dfb5-af35-6c56edf05c7f}</Project>
-      <Private>true</Private>
-      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
-      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
-      <LinkLibraryDependencies>true</LinkLibraryDependencies>
-      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="..\src\uv-common.c" />
     <ClCompile Include="..\src\win\async.c" />
     <ClCompile Include="..\src\win\cares.c" />
     <ClCompile Include="..\src\win\core.c" />
     <ClCompile Include="..\src\win\error.c" />
+    <ClCompile Include="..\src\win\file.c" />
     <ClCompile Include="..\src\win\getaddrinfo.c" />
     <ClCompile Include="..\src\win\handle.c" />
     <ClCompile Include="..\src\win\loop-watcher.c" />
@@ -153,6 +144,16 @@
   <ItemGroup>
     <None Include="..\config-mingw.mk" />
     <None Include="..\Makefile" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="c-ares.vcxproj">
+      <Project>{e5fda024-6e31-43d6-0728-5c5ca3e434c3}</Project>
+      <Private>true</Private>
+      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+      <CopyLocalSatelliteAssemblies>false</CopyLocalSatelliteAssemblies>
+      <LinkLibraryDependencies>true</LinkLibraryDependencies>
+      <UseLibraryDependencyInputs>false</UseLibraryDependencyInputs>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
