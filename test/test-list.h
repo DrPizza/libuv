@@ -66,6 +66,7 @@ TEST_DECLARE   (pass_always)
 TEST_DECLARE   (spawn_exit_code)
 TEST_DECLARE   (spawn_stdout)
 TEST_DECLARE   (file_io)
+TEST_DECLARE   (spawn_stdin)
 HELPER_DECLARE (tcp4_echo_server)
 HELPER_DECLARE (tcp6_echo_server)
 HELPER_DECLARE (pipe_echo_server)
@@ -145,6 +146,7 @@ TASK_LIST_START
 
   TEST_ENTRY  (spawn_exit_code)
   TEST_ENTRY  (spawn_stdout)
+  TEST_ENTRY  (spawn_stdin)
   TEST_ENTRY  (file_io)
 
 #if 0

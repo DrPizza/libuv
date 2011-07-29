@@ -39,7 +39,7 @@
  */
 typedef struct uv_buf_t {
   ULONG len;
-  char* base;
+  char* base;https://github.com/igorzi/libuv.git
 } uv_buf_t;
 
 typedef HANDLE uv_native_file_t;
@@ -90,7 +90,10 @@ typedef HANDLE uv_native_file_t;
     UV_ACCEPT_FIELDS                      \
     HANDLE pipeHandle;                    \
     struct uv_pipe_accept_s* next_pending; \
-  } uv_pipe_accept_t;
+  } uv_pipe_accept_t;                     \
+  typedef struct uv_process_exit_s {      \
+    UV_REQ_FIELDS                         \
+  } uv_process_exit_t;
 
 #define uv_stream_connection_fields       \
   uv_shutdown_t* shutdown_req;
@@ -193,7 +196,14 @@ typedef HANDLE uv_native_file_t;
   int retcode;
 
 #define UV_PROCESS_PRIVATE_FIELDS         \
-  /* empty */
+  struct uv_process_stdio_s {             \
+    uv_pipe_t* server_pipe;               \
+    HANDLE child_pipe;                    \
+  } stdio_pipes[3];                       \
+  uv_process_exit_t exit_req;             \
+  int exit_signal;                        \
+  HANDLE wait_handle;                     \
+  HANDLE process_handle;
 
-int uv_utf16_to_utf8(wchar_t* utf16Buffer, size_t utf16Size, char* utf8Buffer, size_t utf8Size);
+int uv_utf16_to_utf8(const wchar_t* utf16Buffer, size_t utf16Size, char* utf8Buffer, size_t utf8Size);
 int uv_utf8_to_utf16(const char* utf8Buffer, wchar_t* utf16Buffer, size_t utf16Size);

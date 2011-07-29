@@ -145,6 +145,10 @@ void uv_process_reqs() {
         uv_process_getaddrinfo_req((uv_getaddrinfo_t*) ((uv_getaddrinfo_req_t*)req)->handle, (uv_getaddrinfo_req_t*)req);
         break;
 
+      case UV_PROCESS_EXIT:
+        uv_process_proc_exit((uv_process_t*) req->data, req);
+        break;
+
       default:
         assert(0);
     }
