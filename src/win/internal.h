@@ -238,6 +238,9 @@ void uv_process_async_wakeup_req(uv_async_t* handle, uv_wakeup_req_t* req);
 /*
  * Spawn
  */
+void close_process(uv_process_t* handle, int* status, uv_err_t* err);
+void uv_proc_endgame(uv_process_t* handle);
+
 void uv_process_proc_exit(uv_process_t* handle, uv_req_t* req);
 
 

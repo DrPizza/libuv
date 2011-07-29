@@ -44,6 +44,7 @@ static void uv_close_error(uv_handle_t* handle, uv_err_t e) {
   uv_tcp_t* tcp;
   uv_pipe_t* pipe;
   uv_file_t* file;
+  uv_process_t* process;
 
   if (handle->flags & UV_HANDLE_CLOSING) {
     return;
@@ -112,6 +113,12 @@ static void uv_close_error(uv_handle_t* handle, uv_err_t e) {
       }
       return;
 
+    case UV_PROCESS:
+      process = (uv_process_t*)handle;
+      close_process(process, NULL, NULL);
+      uv_want_endgame(handle);
+      return;
+
     default:
       /* Not supported */
       abort();
@@ -169,6 +176,10 @@ void uv_process_endgames() {
 
       case UV_ASYNC:
         uv_async_endgame((uv_async_t*)handle);
+        break;
+
+      case UV_PROCESS:
+        uv_proc_endgame((uv_process_t*)handle);
         break;
 
       default:

@@ -111,8 +111,6 @@ TEST_IMPL(spawn_stdout) {
   int r;
   uv_pipe_t out;
 
-  MessageBoxA(NULL, "client", "client", 0);
-
   uv_init();
 
   init_process_options("spawn_helper2");

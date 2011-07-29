@@ -61,6 +61,7 @@ int process_start(char *name, char *part, process_info_t *p) {
   STARTUPINFOW si;
   PROCESS_INFORMATION pi;
   DWORD result;
+  DWORD creation_flags;
 
   if (GetTempPathW(sizeof(path) / sizeof(WCHAR), (WCHAR*)&path) == 0)
     goto error;
@@ -122,11 +123,20 @@ int process_start(char *name, char *part, process_info_t *p) {
   si.hStdInput = nul;
   si.hStdOutput = file;
   si.hStdError = file;
+  creation_flags = IsDebuggerPresent() ? CREATE_SUSPENDED : 0;
 
   if (!CreateProcessW(image, args, NULL, NULL, TRUE,
-                      0, NULL, NULL, &si, &pi))
+                      creation_flags, NULL, NULL, &si, &pi))
     goto error;
 
+  if (IsDebuggerPresent()) {
+#if defined(_MSC_VER)
+    DebugBreak();
+#elif defined(__GNUC__)
+    asm("int $3");
+#endif
+    ResumeThread(pi.hThread);
+  }
   CloseHandle(pi.hThread);
 
   SetHandleInformation(nul, HANDLE_FLAG_INHERIT, 0);

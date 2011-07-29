@@ -23,6 +23,10 @@
 #include "../uv-common.h"
 #include "internal.h"
 
+#if defined(_MSC_VER)
+#define _CRT_SECURE_NO_WARNINGS 1
+#endif
+
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -30,7 +34,7 @@
 
 #define UTF8_TO_UTF16(s, t)                               \
   size = uv_utf8_to_utf16(s, NULL, 0) * sizeof(wchar_t);  \
-  t = (wchar_t*)malloc(size);                             \
+  t = malloc(size);                                       \
   if (!t) {                                               \
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");          \
   }                                                       \
@@ -121,7 +125,7 @@ static wchar_t* search_path_join_test(const wchar_t* dir,
 
   /* Allocate buffer for output */
   result = result_pos =
-      (wchar_t*)malloc(sizeof(wchar_t) * (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
+      malloc(sizeof(wchar_t) * (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
 
   /* Copy cwd */
   wcsncpy(result_pos, cwd, cwd_len);
@@ -387,7 +391,7 @@ static wchar_t* make_program_args(char* const* args) {
     size += i - 1;
   }
 
-  dst = (wchar_t*)malloc(size);
+  dst = malloc(size);
   if (!dst) {
     // TODO: FATAL
   }
@@ -430,7 +434,7 @@ wchar_t* make_program_env(char* const* envBlock, const wchar_t **path,  const wc
     env++;
   }
 
-  env_win = (wchar_t*)malloc(env_win_len);
+  env_win = malloc(env_win_len);
   if (!env_win) {
     // TODO: FATAL
   }
@@ -481,35 +485,12 @@ static void CALLBACK watch_wait_callback(void* data, BOOLEAN didTimeout) {
 
 
 void uv_process_proc_exit(uv_process_t* handle, uv_req_t* req) {
-  int i;
   DWORD exit_code;
 
-  /* Close stdio handles. */
-  for (i = 0; i < COUNTOF(handle->stdio_pipes); i++) {
-    if (handle->stdio_pipes[i].server_pipe != NULL) {
-      close_pipe(handle->stdio_pipes[i].server_pipe, NULL, NULL);
-      handle->stdio_pipes[i].server_pipe = NULL;
-    }
-
-    if (handle->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
-      CloseHandle(handle->stdio_pipes[i].child_pipe);
-      handle->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
-    }
-  }
-
-  /* Unregister from process notification. */
-  UnregisterWait(handle->wait_handle);
-
-  /* Get the exit code. */
   if (!GetExitCodeProcess(handle->process_handle, &exit_code)) {
-    // TODO: fatal error
+    uv_fatal_error(GetLastError(), "GetExitCodeProcess");
   }
 
-  /* Clean-up the process handle. */
-  CloseHandle(handle->process_handle);
-  handle->process_handle = INVALID_HANDLE_VALUE;
-
-  /* Fire the exit callback. */
   handle->exit_cb(handle, exit_code, handle->exit_signal);
 }
 
@@ -541,7 +522,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
     if (!size) {
       // TODO: error
     } else {
-      cwd = (wchar_t*)malloc(size);
+      cwd = malloc(size);
       GetCurrentDirectoryW(size, cwd);
     }
   }
@@ -679,4 +660,50 @@ int uv_process_kill(uv_process_t* process, int signum) {
   }
 
   return -1;
+}
+
+void close_process(uv_process_t* process, int* status, uv_err_t* err) {
+  int i;
+  /* Close stdio handles. */
+  for (i = 0; i < COUNTOF(process->stdio_pipes); i++) {
+    if (process->stdio_pipes[i].server_pipe != NULL) {
+      close_pipe(process->stdio_pipes[i].server_pipe, NULL, NULL);
+      process->stdio_pipes[i].server_pipe = NULL;
+    }
+
+    if (process->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
+      CloseHandle(process->stdio_pipes[i].child_pipe);
+      process->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
+    }
+  }
+
+  /* Unregister from process notification. */
+  UnregisterWait(process->wait_handle);
+
+  /* Clean-up the process handle. */
+  CloseHandle(process->process_handle);
+  process->process_handle = INVALID_HANDLE_VALUE;
+
+  process->flags |= UV_HANDLE_SHUT;
+}
+
+void uv_proc_endgame(uv_process_t* handle) {
+  uv_err_t err;
+  int status;
+
+  if (handle->flags & UV_HANDLE_SHUTTING &&
+      !(handle->flags & UV_HANDLE_SHUT)) {
+    close_process(handle, &status, &err);
+  }
+
+  if (handle->flags & UV_HANDLE_CLOSING) {
+    assert(!(handle->flags & UV_HANDLE_CLOSED));
+    handle->flags |= UV_HANDLE_CLOSED;
+
+    if (handle->close_cb) {
+      handle->close_cb((uv_handle_t*)handle);
+    }
+
+    uv_unref();
+  }
 }

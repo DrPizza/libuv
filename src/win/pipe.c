@@ -791,7 +791,7 @@ void uv_process_pipe_accept_req(uv_pipe_t* handle, uv_accept_t* raw_req) {
 
     if (handle->flags & UV_HANDLE_STDIO_PIPE) {
       /* We got the child process to connect, so we are now a connection. */
-      uv_connection_init((uv_stream_t*)handle);
+      uv_connection_init((uv_network_stream_t*)handle);
       handle->flags &= ~UV_HANDLE_PIPESERVER;
       handle->handle = req->pipeHandle;
 
