@@ -39,7 +39,7 @@
  */
 typedef struct uv_buf_t {
   ULONG len;
-  char* base;https://github.com/igorzi/libuv.git
+  char* base;
 } uv_buf_t;
 
 typedef HANDLE uv_native_file_t;
