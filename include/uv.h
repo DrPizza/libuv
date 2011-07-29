@@ -41,6 +41,21 @@ typedef intptr_t ssize_t;
 
 typedef struct uv_err_s uv_err_t;
 
+#ifdef __cplusplus
+#define DEFINE_STRUCT(name, parent) \
+struct name##_s : parent##_s {
+#define INHERIT(fields) \
+  /* empty */
+#else
+#define DEFINE_STRUCT(name, parent) \
+struct name##_s { \
+  /* parent##_t; // oh how I wish C allowed anonymous struct members to be hoisted into the enclosing scope */
+#define INHERIT(fields) \
+  fields
+#endif
+#define END_STRUCT() \
+  }
+
 typedef struct uv_handle_s uv_handle_t; /* abstract */
   typedef struct uv_stream_s uv_stream_t; /* abstract */
     typedef struct uv_network_stream_s uv_network_stream_t; /* abstract */
@@ -57,7 +72,7 @@ typedef struct uv_handle_s uv_handle_t; /* abstract */
   typedef struct uv_process_s uv_process_t;
 /* Request types */
 typedef struct uv_req_s uv_req_t; /* abstract */
-  typedef struct uv_stream_req uv_stream_req_t; /* abstract */
+  typedef struct uv_stream_req_s uv_stream_req_t; /* abstract */
     typedef struct uv_read_s uv_read_t;
     typedef struct uv_write_s uv_write_t;
     typedef struct uv_accept_s uv_accept_t;
@@ -350,19 +365,19 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
   UV_STREAM_PRIVATE_FIELDS
 
 /* The abstract base class for all streams. */
-struct uv_stream_s {
-  UV_HANDLE_FIELDS
+DEFINE_STRUCT(uv_stream, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
   UV_STREAM_FIELDS
-};
+END_STRUCT();
 
 #define UV_NETWORK_STREAM_FIELDS \
   UV_NETWORK_STREAM_PRIVATE_FIELDS
 
-struct uv_network_stream_s {
-  UV_HANDLE_FIELDS
-  UV_STREAM_FIELDS
+DEFINE_STRUCT(uv_network_stream, uv_stream)
+  INHERIT(UV_HANDLE_FIELDS)
+  INHERIT(UV_STREAM_FIELDS)
   UV_NETWORK_STREAM_FIELDS
-};
+END_STRUCT();
 
 int uv_listen(uv_network_stream_t* stream, int backlog, uv_connection_cb cb);
 
@@ -427,12 +442,12 @@ int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
  * future this will probably be split into two classes - one a stream and
  * the other a server.
  */
-struct uv_tcp_s {
-  UV_HANDLE_FIELDS
-  UV_STREAM_FIELDS
-  UV_NETWORK_STREAM_FIELDS
+DEFINE_STRUCT(uv_tcp, uv_network_stream)
+  INHERIT(UV_HANDLE_FIELDS)
+  INHERIT(UV_STREAM_FIELDS)
+  INHERIT(UV_NETWORK_STREAM_FIELDS)
   UV_TCP_PRIVATE_FIELDS
-};
+END_STRUCT();
 
 int uv_tcp_init(uv_tcp_t* handle);
 
@@ -457,12 +472,12 @@ int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
 /*
  * A subclass of uv_stream_t representing a pipe stream or pipe server.
  */
-struct uv_pipe_s {
-  UV_HANDLE_FIELDS
-  UV_STREAM_FIELDS
-  UV_NETWORK_STREAM_FIELDS
+DEFINE_STRUCT(uv_pipe, uv_network_stream)
+  INHERIT(UV_HANDLE_FIELDS)
+  INHERIT(UV_STREAM_FIELDS)
+  INHERIT(UV_NETWORK_STREAM_FIELDS)
   UV_PIPE_PRIVATE_FIELDS
-};
+END_STRUCT();
 
 int uv_pipe_init(uv_pipe_t* handle);
 
@@ -471,14 +486,28 @@ int uv_pipe_bind(uv_pipe_t* handle, const char* name);
 int uv_pipe_connect(uv_connect_t* req, uv_pipe_t* handle,
     const char* name, uv_connect_cb cb);
 
+#define UV_SEEKABLE_STREAM_FIELDS \
+  UV_SEEKABLE_STREAM_PRIVATE_FIELDS
+
+DEFINE_STRUCT(uv_seekable_stream, uv_stream)
+  INHERIT(UV_HANDLE_FIELDS)
+  INHERIT(UV_STREAM_FIELDS)
+  UV_SEEKABLE_STREAM_FIELDS
+END_STRUCT();
+
 /*
  * A subclass of uv_stream_t representing a file stream
  */
-struct uv_file_s {
-  UV_HANDLE_FIELDS
-  UV_STREAM_FIELDS
+
+#define UV_FILE_FIELDS \
   UV_FILE_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_file, uv_seekable_stream)
+  INHERIT(UV_HANDLE_FIELDS)
+  INHERIT(UV_STREAM_FIELDS)
+  INHERIT(UV_SEEKABLE_STREAM_FIELDS)
+  UV_FILE_FIELDS
+END_STRUCT();
 
 typedef enum {
   UV_START,
@@ -517,10 +546,14 @@ int uv_file_write_offset(uv_write_t* req,
  * its callback called exactly once per loop iteration, just before the
  * system blocks to wait for completed i/o.
  */
-struct uv_prepare_s {
-  UV_HANDLE_FIELDS
+
+#define UV_PREPARE_FIELDS \
   UV_PREPARE_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_prepare, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_PREPARE_FIELDS
+END_STRUCT();
 
 int uv_prepare_init(uv_prepare_t* prepare);
 
@@ -534,10 +567,13 @@ int uv_prepare_stop(uv_prepare_t* prepare);
  * its callback called exactly once per loop iteration, just after the
  * system returns from blocking.
  */
-struct uv_check_s {
-  UV_HANDLE_FIELDS
+#define UV_CHECK_FIELDS \
   UV_CHECK_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_check, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_CHECK_FIELDS
+END_STRUCT();
 
 int uv_check_init(uv_check_t* check);
 
@@ -552,10 +588,13 @@ int uv_check_stop(uv_check_t* check);
  * other types of callbacks are processed.  When there are multiple "idle"
  * handles active, their callbacks are called in turn.
  */
-struct uv_idle_s {
-  UV_HANDLE_FIELDS
+#define UV_IDLE_FIELDS \
   UV_IDLE_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_idle, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_IDLE_FIELDS
+END_STRUCT();
 
 int uv_idle_init(uv_idle_t* idle);
 
@@ -572,10 +611,13 @@ int uv_idle_stop(uv_idle_t* idle);
  * after the call to async_send. Unlike all other libuv functions,
  * uv_async_send can be called from another thread.
  */
-struct uv_async_s {
-  UV_HANDLE_FIELDS
+#define UV_ASYNC_FIELDS \
   UV_ASYNC_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_async, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_ASYNC_FIELDS
+END_STRUCT();
 
 int uv_async_init(uv_async_t* async, uv_async_cb async_cb);
 
@@ -586,10 +628,13 @@ int uv_async_send(uv_async_t* async);
  * Subclass of uv_handle_t. Wraps libev's ev_timer watcher. Used to get
  * woken up at a specified time in the future.
  */
-struct uv_timer_s {
-  UV_HANDLE_FIELDS
+#define UV_TIMER_FIELDS \
   UV_TIMER_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_timer, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_TIMER_FIELDS
+END_STRUCT();
 
 int uv_timer_init(uv_timer_t* timer);
 
@@ -626,10 +671,13 @@ void uv_ares_destroy(ares_channel channel);
 /*
  * Subclass of uv_handle_t. Used for integration of getaddrinfo.
  */
-struct uv_getaddrinfo_s {
-  UV_HANDLE_FIELDS
+#define UV_GETADDRINFO_FIELDS \
   UV_GETADDRINFO_PRIVATE_FIELDS
-};
+
+DEFINE_STRUCT(uv_getaddrinfo, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_GETADDRINFO_FIELDS
+END_STRUCT();
 
 
 /* uv_getaddrinfo
@@ -664,12 +712,15 @@ typedef struct uv_process_options_s {
   uv_pipe_t* stderr_stream;
 } uv_process_options_t;
 
-struct uv_process_s {
-  UV_HANDLE_FIELDS
-  uv_exit_cb exit_cb;
-  int pid;
-  UV_PROCESS_PRIVATE_FIELDS
-};
+#define UV_PROCESS_FIELDS \
+  uv_exit_cb exit_cb; \
+  int pid; \
+  UV_PROCESS_PRIVATE_FIELDS \
+
+DEFINE_STRUCT(uv_process, uv_handle)
+  INHERIT(UV_HANDLE_FIELDS)
+  UV_PROCESS_FIELDS
+END_STRUCT();
 
 /* Initializes uv_process_t and starts the process. */
 int uv_spawn(uv_process_t*, uv_process_options_t options);

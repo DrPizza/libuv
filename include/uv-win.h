@@ -128,6 +128,9 @@ typedef HANDLE uv_native_file_t;
 #define uv_pipe_connection_fields         \
   HANDLE handle;
 
+#define UV_SEEKABLE_STREAM_PRIVATE_FIELDS \
+  /* empty */
+
 #define UV_PIPE_PRIVATE_FIELDS            \
   wchar_t* name;                          \
   union {                                 \
@@ -190,6 +193,7 @@ typedef HANDLE uv_native_file_t;
   int retcode;
 
 #define UV_PROCESS_PRIVATE_FIELDS         \
+  /* empty */
 
 int uv_utf16_to_utf8(wchar_t* utf16Buffer, size_t utf16Size, char* utf8Buffer, size_t utf8Size);
 int uv_utf8_to_utf16(const char* utf8Buffer, wchar_t* utf16Buffer, size_t utf16Size);
