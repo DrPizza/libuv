@@ -146,15 +146,11 @@ void uv_process_reqs() {
         break;
 
       case UV_PROCESS_EXIT:
-        uv_process_proc_exit((uv_process_t*) req->handle, req);
-        break;
-
-      case UV_PROCESS_EXIT:
-        uv_process_proc_exit((uv_process_t*) req->data);
+        uv_process_proc_exit((uv_process_t*) req->handle);
         break;
 
       case UV_PROCESS_CLOSE:
-        uv_process_proc_close((uv_process_t*) req->data);
+        uv_process_proc_close((uv_process_t*) req->handle);
         break;
 
       default:

@@ -64,10 +64,10 @@ static void uv_process_init(uv_process_t* handle) {
 
   uv_req_init((uv_req_t*)&handle->exit_req);
   handle->exit_req.type = UV_PROCESS_EXIT;
-  handle->exit_req.data = handle;
+  handle->exit_req.handle = (uv_handle_t*)handle;
   uv_req_init((uv_req_t*)&handle->close_req);
   handle->close_req.type = UV_PROCESS_CLOSE;
-  handle->close_req.data = handle;
+  handle->close_req.handle = (uv_handle_t*)handle;
 
   uv_counters()->handle_init++;
   uv_counters()->process_init++;
@@ -767,20 +767,6 @@ done:
   }
 
   return err;
-
-  // TODO: handle error
-
-  CloseHandle(info.hThread);
-
-  return 0;
-
-error:
-  // TODO: free these unconditionally
-  free(application);
-  free(arguments);
-  free(cwd);
-  free(env);
-  return -1;
 }
 
 

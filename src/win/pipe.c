@@ -123,7 +123,7 @@ int uv_stdio_pipe_server(uv_pipe_t* handle, DWORD access, char* name, size_t nam
     goto done;
   }
 
-  uv_connection_init((uv_stream_t*)handle);
+  uv_connection_init((uv_network_stream_t*)handle);
   handle->handle = pipeHandle;
   handle->flags |= UV_HANDLE_GIVEN_OS_HANDLE;
   err = 0;
@@ -605,7 +605,7 @@ static void uv_pipe_queue_read(uv_pipe_t* handle) {
 }
 
 
-int uv_pipe_read_start(uv_pipe_t* handle, uv_alloc_cb alloc_cb, uv_read_cb read_cb) {
+int uv_pipe_read_start(uv_pipe_t* handle, uv_alloc_cb alloc_cb, uv_stream_read_cb read_cb) {
   if (!(handle->flags & UV_HANDLE_CONNECTION)) {
     uv_set_error(UV_EINVAL, 0);
     return -1;
@@ -798,7 +798,7 @@ void uv_process_pipe_accept_req(uv_pipe_t* handle, uv_accept_t* raw_req) {
     handle->pending_accepts = req;
 
     if (handle->connection_cb) {
-      handle->connection_cb((uv_stream_t*)handle, 0);
+      handle->connection_cb((uv_network_stream_t*)handle, 0);
     }
   } else {
     if (req->pipeHandle != INVALID_HANDLE_VALUE) {
