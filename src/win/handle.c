@@ -115,8 +115,7 @@ static void uv_close_error(uv_handle_t* handle, uv_err_t e) {
 
     case UV_PROCESS:
       process = (uv_process_t*)handle;
-      close_process(process, NULL, NULL);
-      uv_want_endgame(handle);
+      uv_process_close(process);
       return;
 
     default:
@@ -179,7 +178,7 @@ void uv_process_endgames() {
         break;
 
       case UV_PROCESS:
-        uv_proc_endgame((uv_process_t*)handle);
+        uv_process_endgame((uv_process_t*)handle);
         break;
 
       default:

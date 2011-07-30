@@ -23,10 +23,6 @@
 #include "../uv-common.h"
 #include "internal.h"
 
-#if defined(_MSC_VER)
-#define _CRT_SECURE_NO_WARNINGS 1
-#endif
-
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -34,20 +30,22 @@
 
 #define UTF8_TO_UTF16(s, t)                               \
   size = uv_utf8_to_utf16(s, NULL, 0) * sizeof(wchar_t);  \
-  t = malloc(size);                                       \
+  t = (wchar_t*)malloc(size);                             \
   if (!t) {                                               \
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");          \
   }                                                       \
   if (!uv_utf8_to_utf16(s, t, size / sizeof(wchar_t))) {  \
     uv_set_sys_error(GetLastError());                     \
-    goto error;                                           \
+    err = -1;                                             \
+    goto done;                                            \
   }
 
 
 static const wchar_t DEFAULT_PATH[1] = L"";
 static const wchar_t DEFAULT_PATH_EXT[20] = L".COM;.EXE;.BAT;.CMD";
 
-static int uv_process_init(uv_process_t* handle) {
+
+static void uv_process_init(uv_process_t* handle) {
   handle->type = UV_PROCESS;
   handle->flags = 0;
   handle->error = uv_ok_;
@@ -56,6 +54,7 @@ static int uv_process_init(uv_process_t* handle) {
   handle->exit_signal = 0;
   handle->wait_handle = INVALID_HANDLE_VALUE;
   handle->process_handle = INVALID_HANDLE_VALUE;
+  handle->close_handle = INVALID_HANDLE_VALUE;
   handle->stdio_pipes[0].server_pipe = NULL;
   handle->stdio_pipes[0].child_pipe = INVALID_HANDLE_VALUE;
   handle->stdio_pipes[1].server_pipe = NULL;
@@ -65,22 +64,16 @@ static int uv_process_init(uv_process_t* handle) {
 
   uv_req_init((uv_req_t*)&handle->exit_req);
   handle->exit_req.type = UV_PROCESS_EXIT;
-  handle->exit_req.handle = (uv_handle_t*)handle;
+  handle->exit_req.data = handle;
+  uv_req_init((uv_req_t*)&handle->close_req);
+  handle->close_req.type = UV_PROCESS_CLOSE;
+  handle->close_req.data = handle;
 
   uv_counters()->handle_init++;
   uv_counters()->process_init++;
 
   uv_ref();
-
-  return 0;
 }
-
-
-static struct watcher_status_struct {
-  uv_async_t async_watcher;
-  HANDLE lock;
-  int num_active;
-} watcher_status;
 
 
 /*
@@ -125,7 +118,7 @@ static wchar_t* search_path_join_test(const wchar_t* dir,
 
   /* Allocate buffer for output */
   result = result_pos =
-      malloc(sizeof(wchar_t) * (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
+      (wchar_t*)malloc(sizeof(wchar_t) * (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
 
   /* Copy cwd */
   wcsncpy(result_pos, cwd, cwd_len);
@@ -370,48 +363,43 @@ static wchar_t* search_path(const wchar_t *file,
 }
 
 
-static wchar_t* make_program_args(char* const* args) {
+static wchar_t* make_program_args(char** args) {
   wchar_t* dst;
   wchar_t* ptr;
-  char* const* arg = args;
+  char** arg;
   size_t size = 0;
   size_t len;
-  int i = 0;
+  int arg_count = 0;
 
-  dst = NULL;
-
-  while (*arg) {
+  /* Count the required size. */
+  for (arg = args; *arg; arg++) {
     size += (uv_utf8_to_utf16(*arg, NULL, 0) * sizeof(wchar_t));
-    i++;
-    arg++;
+    arg_count++;
   }
 
   /* Arguments are separated with a space. */
-  if (i > 0) {
-    size += i - 1;
+  if (arg_count > 0) {
+    size += arg_count - 1;
   }
 
-  dst = malloc(size);
+  dst = (wchar_t*)malloc(size);
   if (!dst) {
-    // TODO: FATAL
+    uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
   }
 
   ptr = dst;
-
-  arg = args;
-  while (*arg) {
+  for (arg = args; *arg; arg++, ptr += len) {
     len = uv_utf8_to_utf16(*arg, ptr, (size_t)(size - (ptr - dst)));
     if (!len) {
       free(dst);
       return NULL;
     }
 
-    arg++;
-    ptr += len;
-    *(ptr - 1) = L' ';
+    if (*(arg + 1)) {
+      /* Replace with a space if there are more args. */
+      *((ptr + len) - 1) = L' ';
+    }
   }
-
-  *(ptr - 1) = L'\0';
 
   return dst;
 }
@@ -423,50 +411,50 @@ static wchar_t* make_program_args(char* const* args) {
   * Get a pointer to the pathext and path environment variables as well,
   * because search_path needs it. These are just pointers into env_win.
   */
-wchar_t* make_program_env(char* const* envBlock, const wchar_t **path,  const wchar_t **path_ext) {
-  char* const* env = envBlock;
-  int env_win_len = 1 * sizeof(wchar_t); // room for closing null
+wchar_t* make_program_env(char** env_block, const wchar_t **path,  const wchar_t **path_ext) {
+  wchar_t* dst;
+  wchar_t* ptr;
+  char** env;
+  int env_len = 1 * sizeof(wchar_t); /* room for closing null */
   int len;
-  wchar_t* env_win, *env_win_pos;
 
-  while (*env) {
-    env_win_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
-    env++;
+  for (env = env_block; *env; env++) {
+    env_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
   }
 
-  env_win = malloc(env_win_len);
-  if (!env_win) {
-    // TODO: FATAL
+  dst = (wchar_t*)malloc(env_len);
+  if (!dst) {
+    uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
   }
 
-  env_win_pos = env_win;
+  ptr = dst;
 
-  env = envBlock;
-  while (*env) {
-    len = uv_utf8_to_utf16(*env, env_win_pos, (size_t)(env_win_len - (env_win_pos - env_win)));
+  for (env = env_block; *env; env++, ptr += len) {
+    len = uv_utf8_to_utf16(*env, ptr, (size_t)(env_len - (ptr - dst)));
     if (!len) {
-      free(env_win);
+      free(dst);
       return NULL;
     }
 
-    // Try to get a pointer to PATH and PATHEXT
-    if (_wcsnicmp(L"PATH=", env_win_pos, 5) == 0) {
-      *path = env_win_pos + 5;
+    /* Try to get a pointer to PATH and PATHEXT */
+    if (_wcsnicmp(L"PATH=", ptr, 5) == 0) {
+      *path = ptr + 5;
     }
-    if (_wcsnicmp(L"PATHEXT=", env_win_pos, 8) == 0) {
-      *path_ext = env_win_pos + 8;
+    if (_wcsnicmp(L"PATHEXT=", ptr, 8) == 0) {
+      *path_ext = ptr + 8;
     }
-
-    env++;
-    env_win_pos += len;
   }
 
-  *env_win_pos = L'\0';
-  return env_win;
+  *ptr = L'\0';
+  return dst;
 }
 
 
-static void CALLBACK watch_wait_callback(void* data, BOOLEAN didTimeout) {
+/* 
+ * Called on Windows thread-pool thread to indicate that 
+ * a child process has exited. 
+ */
+static void CALLBACK exit_wait_callback(void* data, BOOLEAN didTimeout) {
   uv_process_t* process = (uv_process_t*)data;
   
   assert(didTimeout == FALSE);
@@ -476,67 +464,200 @@ static void CALLBACK watch_wait_callback(void* data, BOOLEAN didTimeout) {
 
   /* Post completed */
   if (!PostQueuedCompletionStatus(LOOP->iocp,
-                                0,
-                                0,
-                                &process->exit_req.overlapped)) {
+                                  0,
+                                  0,
+                                  &process->exit_req.overlapped)) {
     uv_fatal_error(GetLastError(), "PostQueuedCompletionStatus");
   }
 }
 
 
-void uv_process_proc_exit(uv_process_t* handle, uv_req_t* req) {
+/* 
+ * Called on Windows thread-pool thread to indicate that 
+ * UnregisterWaitEx has completed. 
+ */
+static void CALLBACK close_wait_callback(void* data, BOOLEAN didTimeout) {
+  uv_process_t* process = (uv_process_t*)data;
+  
+  assert(didTimeout == FALSE);
+  assert(process);
+
+  memset(&process->close_req.overlapped, 0, sizeof(process->close_req.overlapped));
+
+  /* Post completed */
+  if (!PostQueuedCompletionStatus(LOOP->iocp,
+                                  0,
+                                  0,
+                                  &process->close_req.overlapped)) {
+    uv_fatal_error(GetLastError(), "PostQueuedCompletionStatus");
+  }
+}
+
+
+/* Called on main thread after a child process has exited. */
+void uv_process_proc_exit(uv_process_t* handle) {
+  int i;
   DWORD exit_code;
 
-  if (!GetExitCodeProcess(handle->process_handle, &exit_code)) {
-    uv_fatal_error(GetLastError(), "GetExitCodeProcess");
+  /* Close stdio handles. */
+  for (i = 0; i < COUNTOF(handle->stdio_pipes); i++) {
+    if (handle->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
+      CloseHandle(handle->stdio_pipes[i].child_pipe);
+      handle->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
+    }
   }
 
-  handle->exit_cb(handle, exit_code, handle->exit_signal);
+  /* Unregister from process notification. */
+  if (handle->wait_handle != INVALID_HANDLE_VALUE) {
+    UnregisterWait(handle->wait_handle);
+    handle->wait_handle = INVALID_HANDLE_VALUE;
+  }
+
+  /* Clean-up the process handle. */
+  if (handle->process_handle != INVALID_HANDLE_VALUE) {
+    /* Get the exit code. */
+    if (!GetExitCodeProcess(handle->process_handle, &exit_code)) {
+      exit_code = 1;
+    }
+
+    CloseHandle(handle->process_handle);
+    handle->process_handle = INVALID_HANDLE_VALUE;
+  }
+
+  /* Fire the exit callback. */
+  if (handle->exit_cb) {
+    handle->exit_cb(handle, exit_code, handle->exit_signal);
+  }
+}
+
+
+/* Called on main thread after UnregisterWaitEx finishes. */
+void uv_process_proc_close(uv_process_t* handle) {
+  uv_want_endgame((uv_handle_t*)handle);
+}
+
+
+void uv_process_endgame(uv_process_t* handle) {
+  if (handle->flags & UV_HANDLE_CLOSING) {
+    assert(!(handle->flags & UV_HANDLE_CLOSED));
+    handle->flags |= UV_HANDLE_CLOSED;
+
+    if (handle->close_cb) {
+      handle->close_cb((uv_handle_t*)handle);
+    }
+
+    uv_unref();
+  }
+}
+
+
+void uv_process_close(uv_process_t* handle) {
+  if (handle->wait_handle != INVALID_HANDLE_VALUE) {
+    handle->close_handle = CreateEvent(NULL, FALSE, FALSE, NULL);
+    UnregisterWaitEx(handle->wait_handle, handle->close_handle);
+    handle->wait_handle = NULL;
+
+    RegisterWaitForSingleObject(&handle->wait_handle, handle->close_handle,
+        close_wait_callback, (void*)handle, INFINITE,
+        WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE);
+  } else {
+    uv_want_endgame((uv_handle_t*)handle);
+  }
+}
+
+
+static int uv_create_stdio_pipe_pair(uv_pipe_t* server_pipe, HANDLE* child_pipe,  DWORD server_access, DWORD child_access) {
+  int err;
+  SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
+  char pipe_name[64];
+
+  if (server_pipe->type != UV_NAMED_PIPE) { 
+    uv_set_error(UV_EINVAL, 0);
+    err = -1;
+    goto done; 
+  }
+
+  /* Create server pipe handle. */
+  err = uv_stdio_pipe_server(server_pipe, server_access, pipe_name, sizeof(pipe_name));
+  if (err) {
+    goto done;
+  }
+
+  /* Create child pipe handle. */
+  *child_pipe = CreateFileA(pipe_name,
+                            child_access,
+                            0,
+                            &sa,
+                            OPEN_EXISTING,
+                            0,
+                            NULL);
+
+  if (*child_pipe == INVALID_HANDLE_VALUE) {
+    uv_set_sys_error(GetLastError());
+    err = -1;
+    goto done;
+  }
+
+  /* Do a blocking ConnectNamedPipe.  This should not block because
+   * we have both ends of the pipe created.
+   */
+  if (!ConnectNamedPipe(server_pipe->handle, NULL)) {
+    if (GetLastError() != ERROR_PIPE_CONNECTED) {
+      uv_set_sys_error(GetLastError());
+      err = -1;
+      goto done;
+    }
+  }
+
+  err = 0;
+
+done:
+  if (err) {
+    if (server_pipe->handle != INVALID_HANDLE_VALUE) {
+      close_pipe(server_pipe, NULL, NULL);
+    }
+
+    if (*child_pipe != INVALID_HANDLE_VALUE) {
+      CloseHandle(*child_pipe);
+      *child_pipe = INVALID_HANDLE_VALUE;
+    }
+  }
+
+  return err;
 }
 
 
 int uv_spawn(uv_process_t* process, uv_process_options_t options) {
-  int size;
-  wchar_t* application_path;
-  char name[64];
-  BOOL success;
-  wchar_t* application, *arguments, *env, *cwd;
+  int err, i;
   const wchar_t* path = NULL;
   const wchar_t* path_ext = NULL;
-
-  SECURITY_ATTRIBUTES sa; 
+  int size;
+  wchar_t* application_path, *application, *arguments, *env, *cwd;
   STARTUPINFOW startup;
   PROCESS_INFORMATION info;
  
-  memset(process, 0, sizeof(uv_process_t)); 
   uv_process_init(process);
 
   process->exit_cb = options.exit_cb;
-
   UTF8_TO_UTF16(options.file, application);
+  arguments = options.args ? make_program_args(options.args) : NULL;
+  env = options.env ? make_program_env(options.env, &path, &path_ext) : NULL;
 
   if (options.cwd) {
     UTF8_TO_UTF16(options.cwd, cwd);
   } else {
     size  = GetCurrentDirectoryW(0, NULL) * sizeof(wchar_t);
-    if (!size) {
-      // TODO: error
-    } else {
-      cwd = malloc(size);
+    if (size) {
+      cwd = (wchar_t*)malloc(size);
+      if (!cwd) {
+        uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
+      }
       GetCurrentDirectoryW(size, cwd);
+    } else {
+      uv_set_sys_error(GetLastError());
+      err = -1;
+      goto done;
     }
-  }
-
-  if (options.args) {
-    arguments = make_program_args(options.args);
-  } else {
-    arguments = NULL;
-  }
-
-  if (options.env) {
-    env = make_program_env(options.env, &path, &path_ext);
-  } else {
-    env = NULL;
   }
 
   application_path = search_path(application, 
@@ -545,59 +666,37 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
                                  path_ext ? path_ext : DEFAULT_PATH_EXT);
 
   if (!application_path) {
-    goto error;
+    uv_set_error(UV_EINVAL, 0);
+    err = -1;
+    goto done;
   }
 
-  sa.nLength = sizeof(SECURITY_ATTRIBUTES); 
-  sa.bInheritHandle = TRUE; 
-  sa.lpSecurityDescriptor = NULL; 
-
-  /* Create pipes */
+  /* Create stdio pipes. */
   if (options.stdin_stream) {
-    // TODO: check for errors
-    uv_stdio_pipe_server(options.stdin_stream, PIPE_ACCESS_OUTBOUND, name, sizeof(name));
+    err = uv_create_stdio_pipe_pair(options.stdin_stream, &process->stdio_pipes[0].child_pipe, PIPE_ACCESS_OUTBOUND, GENERIC_READ);
+    if (err) {
+      goto done;
+    }
+
     process->stdio_pipes[0].server_pipe = options.stdin_stream;
-
-    /* Create client pipe handle */
-    process->stdio_pipes[0].child_pipe = CreateFileA(name,
-                                                     GENERIC_READ,
-                                                     0,
-                                                     &sa,
-                                                     OPEN_EXISTING,
-                                                     0,
-                                                     NULL);
-
-    // TODO: check for errors
   }
+
   if (options.stdout_stream) {
-    uv_stdio_pipe_server(options.stdout_stream, PIPE_ACCESS_INBOUND, name, sizeof(name));
+    err = uv_create_stdio_pipe_pair(options.stdout_stream, &process->stdio_pipes[1].child_pipe, PIPE_ACCESS_INBOUND, GENERIC_WRITE);
+    if (err) {
+      goto done;
+    }
+
     process->stdio_pipes[1].server_pipe = options.stdout_stream;
-
-    /* Create client pipe handle */
-    process->stdio_pipes[1].child_pipe = CreateFileA(name,
-                                                     GENERIC_WRITE,
-                                                     0,
-                                                     &sa,
-                                                     OPEN_EXISTING,
-                                                     0,
-                                                     NULL);
-
-    // TODO: check for errors
   }
+
   if (options.stderr_stream) {
-    uv_stdio_pipe_server(options.stderr_stream, PIPE_ACCESS_INBOUND, name, sizeof(name));
+    err = uv_create_stdio_pipe_pair(options.stderr_stream, &process->stdio_pipes[2].child_pipe, PIPE_ACCESS_INBOUND, GENERIC_WRITE);
+    if (err) {
+      goto done;
+    }
+
     process->stdio_pipes[2].server_pipe = options.stderr_stream;
-
-    /* Create client pipe handle */
-    process->stdio_pipes[2].child_pipe = CreateFileA(name,
-                                                     GENERIC_WRITE,
-                                                     0,
-                                                     &sa,
-                                                     OPEN_EXISTING,
-                                                     0,
-                                                     NULL);
-
-    // TODO: check for errors
   }
 
   startup.cb = sizeof(startup);
@@ -611,30 +710,63 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   startup.hStdOutput = process->stdio_pipes[1].child_pipe;
   startup.hStdError = process->stdio_pipes[2].child_pipe;
 
-  success = CreateProcessW(
-    application_path,
-    arguments,
-    NULL,
-    NULL,
-    1,
-    CREATE_UNICODE_ENVIRONMENT,
-    env,
-    cwd,
-    &startup,
-    &info
-  );
-
-  if (!success) {
-    goto error;
+  if (!CreateProcessW(application_path,
+                      arguments,
+                      NULL,
+                      NULL,
+                      1,
+                      CREATE_UNICODE_ENVIRONMENT,
+                      env,
+                      cwd,
+                      &startup,
+                      &info)) {
+    uv_set_sys_error(GetLastError());
+    err = -1;
+    goto done;
   }
 
   process->process_handle = info.hProcess;
   process->pid = info.dwProcessId;
   
-  /* Get a notification when the child process exits. */
-  RegisterWaitForSingleObject(&process->wait_handle, process->process_handle,
-      watch_wait_callback, (void*)process, INFINITE,
-      WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE);
+  /* Setup notifications for when the child process exits. */
+  if (!RegisterWaitForSingleObject(&process->wait_handle, process->process_handle,
+      exit_wait_callback, (void*)process, INFINITE,
+      WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE)) {
+    uv_set_sys_error(GetLastError());
+    err = -1;
+    goto done;
+  }
+
+  CloseHandle(info.hThread);
+  err = 0;
+
+done:
+  free(application_path);
+  free(application);
+  free(arguments);
+  free(cwd);
+  free(env);
+
+  if (err) {
+    for (i = 0; i < COUNTOF(process->stdio_pipes); i++) {
+      if (process->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
+        CloseHandle(process->stdio_pipes[i].child_pipe);
+        process->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
+      }
+    }
+
+    if (process->wait_handle != INVALID_HANDLE_VALUE) {
+      UnregisterWait(process->wait_handle);
+      process->wait_handle = INVALID_HANDLE_VALUE;
+    }
+
+    if (process->process_handle != INVALID_HANDLE_VALUE) {
+      CloseHandle(process->process_handle);
+      process->process_handle = INVALID_HANDLE_VALUE;
+    }
+  }
+
+  return err;
 
   // TODO: handle error
 
@@ -662,50 +794,4 @@ int uv_process_kill(uv_process_t* process, int signum) {
   }
 
   return -1;
-}
-
-void close_process(uv_process_t* process, int* status, uv_err_t* err) {
-  int i;
-  /* Close stdio handles. */
-  for (i = 0; i < COUNTOF(process->stdio_pipes); i++) {
-    if (process->stdio_pipes[i].server_pipe != NULL) {
-      close_pipe(process->stdio_pipes[i].server_pipe, NULL, NULL);
-      process->stdio_pipes[i].server_pipe = NULL;
-    }
-
-    if (process->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
-      CloseHandle(process->stdio_pipes[i].child_pipe);
-      process->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
-    }
-  }
-
-  /* Unregister from process notification. */
-  UnregisterWait(process->wait_handle);
-
-  /* Clean-up the process handle. */
-  CloseHandle(process->process_handle);
-  process->process_handle = INVALID_HANDLE_VALUE;
-
-  process->flags |= UV_HANDLE_SHUT;
-}
-
-void uv_proc_endgame(uv_process_t* handle) {
-  uv_err_t err;
-  int status;
-
-  if (handle->flags & UV_HANDLE_SHUTTING &&
-      !(handle->flags & UV_HANDLE_SHUT)) {
-    close_process(handle, &status, &err);
-  }
-
-  if (handle->flags & UV_HANDLE_CLOSING) {
-    assert(!(handle->flags & UV_HANDLE_CLOSED));
-    handle->flags |= UV_HANDLE_CLOSED;
-
-    if (handle->close_cb) {
-      handle->close_cb((uv_handle_t*)handle);
-    }
-
-    uv_unref();
-  }
 }
