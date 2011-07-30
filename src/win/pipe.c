@@ -79,7 +79,7 @@ int uv_pipe_init_with_handle(uv_pipe_t* handle, HANDLE pipeHandle) {
 int uv_stdio_pipe_server(uv_pipe_t* handle, DWORD access, char* name, size_t nameSize) {
   uv_pipe_accept_t* req;
   int i;
-  int err = uv_pipe_init(handle);
+
   handle->flags |= UV_HANDLE_STDIO_PIPE;
   handle->flags |= UV_HANDLE_PIPESERVER;
 
@@ -87,45 +87,48 @@ int uv_stdio_pipe_server(uv_pipe_t* handle, DWORD access, char* name, size_t nam
     req = &handle->accept_reqs[i];
     uv_req_init((uv_req_t*) req);
     req->type = UV_ACCEPT;
-    req->data = handle;
+    req->handle = (uv_handle_t*)handle;
     req->pipeHandle = INVALID_HANDLE_VALUE;
     req->next_pending = NULL;
   }
 
   req = &handle->accept_reqs[0];
 
-  if (!err) {
-    make_unique_pipe_name(name, nameSize);
-    req->pipeHandle = CreateNamedPipeA(name,
-                                      access | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
-                                      PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                      1,
-                                      65536,
-                                      65536,
-                                      0,
-                                      NULL);
+  make_unique_pipe_name(name, nameSize);
+  req->pipeHandle = CreateNamedPipeA(name,
+                                    access | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                    1,
+                                    65536,
+                                    65536,
+                                    0,
+                                    NULL);
 
-
-    // TODO: check for error
-
-    if (CreateIoCompletionPort(req->pipeHandle,
-                             LOOP->iocp,
-                             (ULONG_PTR)handle,
-                             0) == NULL) {
-      uv_set_sys_error(GetLastError());
-      goto error;
-    }
-
-    memset(&req->overlapped, 0, sizeof(req->overlapped));
-    ConnectNamedPipe(req->pipeHandle, &req->overlapped);
-
-    // TODO: check for error
-
-    handle->reqs_pending++;
+  if (req->pipeHandle == INVALID_HANDLE_VALUE) {
+    uv_set_sys_error(GetLastError());
+    goto error;
   }
 
+  if (CreateIoCompletionPort(req->pipeHandle,
+                           LOOP->iocp,
+                           (ULONG_PTR)handle,
+                           0) == NULL) {
+    uv_set_sys_error(GetLastError());
+    goto error;
+  }
+
+  memset(&req->overlapped, 0, sizeof(req->overlapped));
+  if (!ConnectNamedPipe(req->pipeHandle, &req->overlapped) && 
+       GetLastError() != ERROR_IO_PENDING && 
+       GetLastError() != ERROR_PIPE_CONNECTED) {
+    uv_set_sys_error(GetLastError());
+    goto error;
+  }
+
+  handle->reqs_pending++;
+
 error:
-  return err;
+  return -1;
 }
 
 
@@ -543,7 +546,7 @@ int uv_pipe_listen(uv_pipe_t* handle, int backlog, uv_connection_cb cb) {
     uv_req_init((uv_req_t*) req);
     req->pipeHandle = pipeHandle;
     req->type = UV_ACCEPT;
-    req->data = handle;
+    req->handle = (uv_handle_t*)handle;
     req->next_pending = NULL;
 
     if (uv_set_pipe_handle(handle, pipeHandle)) {

@@ -65,7 +65,7 @@ static int uv_process_init(uv_process_t* handle) {
 
   uv_req_init((uv_req_t*)&handle->exit_req);
   handle->exit_req.type = UV_PROCESS_EXIT;
-  handle->exit_req.data = handle;
+  handle->exit_req.handle = (uv_handle_t*)handle;
 
   uv_counters()->handle_init++;
   uv_counters()->process_init++;
@@ -596,6 +596,8 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
                                                      OPEN_EXISTING,
                                                      0,
                                                      NULL);
+
+    // TODO: check for errors
   }
 
   startup.cb = sizeof(startup);

@@ -129,7 +129,11 @@ TEST_IMPL(spawn_stdout) {
 
   ASSERT(exit_cb_called == 1);
   ASSERT(close_cb_called == 2); /* Once for process once for the pipe. */
+#ifdef _WIN32
+  ASSERT(strcmp("hello world\r\n", output) == 0);
+#else
   ASSERT(strcmp("hello world\n", output) == 0);
+#endif
 
   return 0;
 }

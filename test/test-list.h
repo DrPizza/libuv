@@ -145,12 +145,11 @@ TASK_LIST_START
   TEST_ENTRY  (getsockname)
 
   TEST_ENTRY  (file_io)
-
   TEST_ENTRY  (spawn_exit_code)
   TEST_ENTRY  (spawn_stdout)
   TEST_ENTRY  (spawn_stdin)
-
 #if 0
+
   /* These are for testing the test runner. */
   TEST_ENTRY  (fail_always)
   TEST_ENTRY  (pass_always)
