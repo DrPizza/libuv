@@ -190,10 +190,10 @@ static void eio_destroy (eio_req *req);
   symlink (const char *old, const char *neu)
   {
     #if WINVER >= 0x0600
-      if (CreateSymbolicLink (neu, old, 1))
+      if (CreateSymbolicLinkA (neu, old, 1))
         return 0;
 
-      if (CreateSymbolicLink (neu, old, 0))
+      if (CreateSymbolicLinkA (neu, old, 0))
         return 0;
     #endif
 
@@ -1133,7 +1133,7 @@ eio__sendfile (int ofd, int ifd, off_t offset, size_t count)
       /* has no way to get an independent handle to the same file description */
       typedef BOOL (*LPFN_TRANSMITFILE)(SOCKET, HANDLE, DWORD, DWORD, OVERLAPPED*, TRANSMIT_FILE_BUFFERS*, DWORD);
       LPFN_TRANSMITFILE _TransmitFile;
-      const GUID TRANSMITFILEGUID = WSAID_TRANSMITFILE;
+      GUID TRANSMITFILEGUID = WSAID_TRANSMITFILE;
       DWORD bytes;
       HANDLE h = (HANDLE)_get_osfhandle(ifd);
       OVERLAPPED o = {0};
@@ -1678,7 +1678,7 @@ eio__scandir (eio_req *req, etp_worker *self)
   eio_ino_t inode_bits = 0;
 #ifdef _WIN32
   HANDLE dirp;
-  WIN32_FIND_DATA entp;
+  WIN32_FIND_DATAA entp;
 #else
   DIR *dirp;
   EIO_STRUCT_DIRENT *entp;
@@ -1703,7 +1703,7 @@ eio__scandir (eio_req *req, etp_worker *self)
       fmt = "%s/*";
 
     _snprintf (path, MAX_PATH, fmt, (const char *)req->ptr1);
-    dirp = FindFirstFile (path, &entp);
+    dirp = FindFirstFileA (path, &entp);
     free (path);
 
     if (dirp == INVALID_HANDLE_VALUE)
@@ -1921,7 +1921,7 @@ eio__scandir (eio_req *req, etp_worker *self)
           }
 
 #ifdef _WIN32
-        if (!FindNextFile (dirp, &entp))
+        if (!FindNextFileA (dirp, &entp))
           {
             FindClose (dirp);
             dirp = 0;
@@ -2140,7 +2140,7 @@ eio_execute (etp_worker *self, eio_req *req)
 
       case EIO_BUSY:
 #ifdef _WIN32
-	Sleep (req->nv1 * 1e3);
+        Sleep (req->nv1 * 1e3);
 #else
         {
           struct timeval tv;
