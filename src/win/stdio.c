@@ -45,7 +45,7 @@ static uv_pipe_t* uv_make_pipe_for_std_handle(HANDLE handle) {
 }
 
 
-uv_stream_t* uv_std_handle(uv_std_type type) {
+uv_network_stream_t* uv_std_handle(uv_std_type type) {
   HANDLE handle;
 
   switch (type) {
@@ -56,7 +56,7 @@ uv_stream_t* uv_std_handle(uv_std_type type) {
       }
 
       /* Assume only named pipes for now. */
-      return (uv_stream_t*)uv_make_pipe_for_std_handle(handle);
+      return (uv_network_stream_t*)uv_make_pipe_for_std_handle(handle);
       break;
 
     case UV_STDOUT:

@@ -409,7 +409,7 @@ typedef enum {
   UV_STDERR
 } uv_std_type;
 
-uv_stream_t* uv_std_handle(uv_std_type type);
+uv_network_stream_t* uv_std_handle(uv_std_type type);
 
 /*
  * Write data to stream. Buffers are written in order. Example:
