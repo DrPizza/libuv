@@ -212,6 +212,7 @@ typedef HANDLE uv_native_file_t;
     HANDLE child_pipe;                    \
   } stdio_pipes[3];                       \
   int exit_signal;                        \
+  DWORD spawn_errno;                      \
   HANDLE wait_handle;                     \
   HANDLE process_handle;                  \
   HANDLE close_handle;
