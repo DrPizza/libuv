@@ -832,11 +832,6 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
                      &startup,
                      &info)) {
     if (IsDebuggerPresent()) {
-#if defined(_MSC_VER)
-      DebugBreak();
-#elif defined(__GNUC__)
-      asm("int $3");
-#endif
       ResumeThread(info.hThread);
     }
 

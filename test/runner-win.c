@@ -130,11 +130,6 @@ int process_start(char *name, char *part, process_info_t *p) {
     goto error;
 
   if (IsDebuggerPresent()) {
-#if defined(_MSC_VER)
-    DebugBreak();
-#elif defined(__GNUC__)
-    asm("int $3");
-#endif
     ResumeThread(pi.hThread);
   }
   CloseHandle(pi.hThread);
