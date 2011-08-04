@@ -734,6 +734,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   wchar_t* application_path, *application, *arguments, *env, *cwd;
   STARTUPINFOW startup;
   PROCESS_INFORMATION info;
+  DWORD creation_flags;
 
   uv_process_init(process);
 
@@ -818,16 +819,27 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   startup.hStdOutput = process->stdio_pipes[1].child_pipe;
   startup.hStdError = process->stdio_pipes[2].child_pipe;
 
+  creation_flags = IsDebuggerPresent() ? CREATE_SUSPENDED | DEBUG_PROCESS : 0;
+
   if (CreateProcessW(application_path,
                      arguments,
                      NULL,
                      NULL,
-                     1,
+                     creation_flags,
                      CREATE_UNICODE_ENVIRONMENT,
                      env,
                      cwd,
                      &startup,
                      &info)) {
+    if (IsDebuggerPresent()) {
+#if defined(_MSC_VER)
+      DebugBreak();
+#elif defined(__GNUC__)
+      asm("int $3");
+#endif
+      ResumeThread(info.hThread);
+    }
+
     /* Spawn succeeded */
     process->process_handle = info.hProcess;
     process->pid = info.dwProcessId;
