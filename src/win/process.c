@@ -76,48 +76,6 @@ static void uv_process_init(uv_process_t* handle) {
 
 
 /*
- * Quotes command line arguments
- * Returns a pointer to the end (next char to be written) of the buffer
- */
-static wchar_t* quote_cmd_arg(wchar_t *source, wchar_t *target,
-    wchar_t terminator) {
-  int len = wcslen(source),
-      i;
-
-  // Check if the string must be quoted;
-  // if unnecessary, don't do it, it may only confuse older programs.
-  if (len == 0) {
-    goto quote;
-  }
-  for (i = 0; i < len; i++) {
-    if (source[i] == L' ' || source[i] == L'"') {
-      goto quote;
-    }
-  }
-
-  // No quotation needed
-  wcsncpy(target, source, len);
-  target += len;
-  *(target++) = terminator;
-  return target;
-
-quote:
-  // Quote
-  *(target++) = L'"';
-  for (i = 0; i < len; i++) {
-    if (source[i] == L'"' || source[i] == L'\\') {
-      *(target++) = '\\';
-    }
-    *(target++) = source[i];
-  }
-  *(target++) = L'"';
-  *(target++) = terminator;
-
-  return target;
-}
-
-
-/*
  * Path search functions
  */
 
@@ -443,8 +401,10 @@ static wchar_t* make_program_args(char** args) {
     if (!len) {
       goto error;
     }
-
-    ptr = quote_cmd_arg(buffer, ptr, *(arg + 1) ? L' ' : L'\0');
+    len = wcslen(buffer);
+    wcscpy(ptr, buffer);
+    ptr += len;
+    *ptr++ = *(arg + 1) ? L' ' : L'\0';
   }
 
   free(buffer);
