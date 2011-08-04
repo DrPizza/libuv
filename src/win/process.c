@@ -819,7 +819,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   startup.hStdOutput = process->stdio_pipes[1].child_pipe;
   startup.hStdError = process->stdio_pipes[2].child_pipe;
 
-  creation_flags = IsDebuggerPresent() ? CREATE_SUSPENDED | DEBUG_PROCESS : 0;
+  creation_flags = IsDebuggerPresent() ? CREATE_SUSPENDED : 0;
 
   if (CreateProcessW(application_path,
                      arguments,
