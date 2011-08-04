@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\test\echo-server.c" />
+    <ClCompile Include="..\test\test-argument-escaping.c" />
     <ClCompile Include="..\test\test-async.c" />
     <ClCompile Include="..\test\test-delayed-accept.c" />
     <ClCompile Include="..\test\test-callback-stack.c" />
