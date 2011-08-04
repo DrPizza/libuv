@@ -778,8 +778,11 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   startup.hStdInput = process->stdio_pipes[0].child_pipe;
   startup.hStdOutput = process->stdio_pipes[1].child_pipe;
   startup.hStdError = process->stdio_pipes[2].child_pipe;
-
+#ifdef DEBUG
   creation_flags = IsDebuggerPresent() ? CREATE_SUSPENDED : 0;
+#else
+  creation_flags = 0;
+#endif
 
   if (CreateProcessW(application_path,
                      arguments,
@@ -791,9 +794,11 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
                      cwd,
                      &startup,
                      &info)) {
+#ifdef DEBUG
     if (IsDebuggerPresent()) {
       ResumeThread(info.hThread);
     }
+#endif
 
     /* Spawn succeeded */
     process->process_handle = info.hProcess;
