@@ -365,26 +365,31 @@ static wchar_t* search_path(const wchar_t *file,
  * Quotes command line arguments
  * Returns a pointer to the end (next char to be written) of the buffer
  */
-/*static */wchar_t* quote_cmd_arg(const wchar_t *source, wchar_t *target) {
+wchar_t* quote_cmd_arg(const wchar_t *source, wchar_t *target) {
   int len = wcslen(source),
       i, quote_hit;
   wchar_t* start;
 
-  // Check if the string must be quoted;
-  // if unnecessary, don't do it, it may only confuse older programs.
+  /* 
+   * Check if the string must be quoted;
+   * if unnecessary, don't do it, it may only confuse older programs.
+   */
   if (len == 0) {
     return target;
   }
 
   if (NULL == wcspbrk(source, L" \t\"")) {
-    // No quotation needed
+    /* No quotation needed */
     wcsncpy(target, source, len);
     target += len;
     return target;
   }
 
   if (NULL == wcspbrk(source, L"\"\\")) {
-    // no embedded double quotes or backlashes, so I can just wrap quote marks around the whole thing
+    /* 
+     * No embedded double quotes or backlashes, so I can just wrap
+     * quote marks around the whole thing.
+     */
     *(target++) = L'"';
     wcsncpy(target, source, len);
     target += len;
@@ -392,20 +397,23 @@ static wchar_t* search_path(const wchar_t *file,
     return target;
   }
 
-  // input : hello"world
-  // output: "hello\"world"
-  // input : hello""world
-  // output: "hello\"\"world"
-  // input : hello\world
-  // output: "hello\world"
-  // input : hello\\world
-  // output: "hello\\world"
-  // input : hello\"world
-  // output: "hello\\\"world"
-  // input : hello\\"world
-  // output: "hello\\\\\"world"
-  // input : hello world\
-  // output: "hello world\"
+  /*
+   * Expected intput/output:
+   *   input : hello"world
+   *   output: "hello\"world"
+   *   input : hello""world
+   *   output: "hello\"\"world"
+   *   input : hello\world
+   *   output: hello\world
+   *   input : hello\\world
+   *   output: hello\\world
+   *   input : hello\"world
+   *   output: "hello\\\"world"
+   *   input : hello\\"world
+   *   output: "hello\\\\\"world"
+   *   input : hello world\
+   *   output: "hello world\"
+   */
 
   *(target++) = L'"';
   start = target;
@@ -429,7 +437,7 @@ static wchar_t* search_path(const wchar_t *file,
   return target;
 }
 
-/*static */wchar_t* make_program_args(char** args, int verbatim_arguments) {
+wchar_t* make_program_args(char** args, int verbatim_arguments) {
   wchar_t* dst;
   wchar_t* ptr;
   char** arg;
@@ -469,9 +477,8 @@ static wchar_t* search_path(const wchar_t *file,
       goto error;
     }
     if (verbatim_arguments) {
-      len = wcslen(buffer);
       wcscpy(ptr, buffer);
-      ptr += len;
+      ptr += len - 1;
     } else {
       ptr = quote_cmd_arg(buffer, ptr);
     }
