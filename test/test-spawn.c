@@ -351,6 +351,8 @@ wchar_t* make_program_env(char** env_block);
 TEST_IMPL(environment_creation) {
   char* environment[] = {
     "FOO=BAR",
+    "SYSTEM=ROOT", /* substring of a supplied var name */
+    "SYSTEMROOTED=OMG", /* supplied var name is a substring */
     "TEMP=C:\\Temp",
     "BAZ=QUX",
     NULL

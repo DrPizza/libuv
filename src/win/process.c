@@ -494,6 +494,14 @@ error:
   return NULL;
 }
 
+typedef struct env_var {
+  const char* narrow;
+  const wchar_t* wide;
+  int len; /* including null or '=' */
+  int supplied;
+  int value_len;
+} env_var_t;
+
 /*
  * If we learn that people are passing in huge environment blocks
  * then we should probably qsort() the array and then bsearch()
@@ -501,14 +509,17 @@ error:
  * issues associated with that solution; this is the caller's 
  * char**, and modifying it is rude.
  */
-static int env_block_contains_var(char** env_block, const char* var) {
-  int var_len = strlen(var);
-  for(; *env_block; ++env_block) {
-    if (_strnicmp(*env_block, var, var_len) == 0) {
-      return 1;
+static void check_required_vars_contains_var(env_var_t* required, int size, const char* var) {
+  int i;
+  int var_len = strchr(var, '=') - var;
+  for (i = 0; i < size; ++i) {
+    if (var_len == required[i].len - 1
+    && _strnicmp(required[i].narrow, var, var_len) == 0) {
+      required[i].supplied =  1;
+      return;
     }
   }
-  return 0;
+  required[i].supplied = 0;
 }
 
 /*
@@ -530,34 +541,33 @@ wchar_t* make_program_env(char** env_block) {
   int len;
   int i;
   DWORD var_size;
-  static const wchar_t* required_vars[] = {
-    L"SYSTEMROOT",
-    L"SYSTEMDRIVE",
-    L"TEMP",
+
+#define E_V(str) { ##str, L##str, sizeof(##str), 0 }
+  env_var_t required_vars[] = {
+    E_V("SYSTEMROOT"),
+    E_V("SYSTEMDRIVE"),
+    E_V("TEMP"),
   };
-  static const char* narrow_required_vars[] = {
-    "SYSTEMROOT",
-    "SYSTEMDRIVE",
-    "TEMP",
-  };
+#undef E_V
 
   for (env = env_block; *env; env++) {
+    check_required_vars_contains_var(required_vars, sizeof(required_vars) / sizeof(*required_vars), *env);
     env_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
   }
 
   for (i = 0; i < sizeof(required_vars) / sizeof(*required_vars); ++i) {
-    if (!env_block_contains_var(env_block, narrow_required_vars[i])) {
-      env_len += wcslen(required_vars[i]) * sizeof(wchar_t);
-      env_len += wcslen(L"=") * sizeof(wchar_t);
-      var_size = GetEnvironmentVariableW(required_vars[i], NULL, 0);
+    if (!required_vars[i].supplied) {
+      env_len += required_vars[i].len * sizeof(wchar_t);
+      var_size = GetEnvironmentVariableW(required_vars[i].wide, NULL, 0);
       if (var_size == 0) {
         uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
       }
-      env_len += (int)var_size + sizeof(wchar_t);
+      required_vars[i].value_len = (int)var_size;
+      env_len += (int)var_size * sizeof(wchar_t);
     }
   }
 
-  dst = (wchar_t*)malloc(env_len);
+  dst = malloc(env_len);
   if (!dst) {
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
   }
@@ -573,20 +583,15 @@ wchar_t* make_program_env(char** env_block) {
   }
 
   for (i = 0; i < sizeof(required_vars) / sizeof(*required_vars); ++i) {
-    if (!env_block_contains_var(env_block, narrow_required_vars[i])) {
-      wcscpy(ptr, required_vars[i]);
-      ptr += wcslen(required_vars[i]);
+    if (!required_vars[i].supplied) {
+      wcscpy(ptr, required_vars[i].wide);
+      ptr += required_vars[i].len - 1;
       *ptr++ = L'=';
-      var_size = GetEnvironmentVariableW(required_vars[i], NULL, 0);
+      var_size = GetEnvironmentVariableW(required_vars[i].wide, ptr, required_vars[i].value_len);
       if (var_size == 0) {
         uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
       }
-      var_size = GetEnvironmentVariableW(required_vars[i], ptr, var_size);
-      if (var_size == 0) {
-        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
-      }
-      ptr += var_size;
-      *ptr++ = L'\0';
+      ptr += required_vars[i].value_len;
     }
   }
 
