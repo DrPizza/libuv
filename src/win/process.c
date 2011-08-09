@@ -495,19 +495,66 @@ error:
 }
 
 /*
-  * The way windows takes environment variables is different than what C does;
-  * Windows wants a contiguous block of null-terminated strings, terminated
-  * with an additional null.
-  */
+ * If we learn that people are passing in huge environment blocks
+ * then we should probably qsort() the array and then bsearch()
+ * to see if it contains this variable. But there are ownership
+ * issues associated with that solution; this is the caller's 
+ * char**, and modifying it is rude.
+ */
+static int env_block_contains_var(char** env_block, const char* var) {
+  int var_len = strlen(var);
+  for(; *env_block; ++env_block) {
+    if (_strnicmp(*env_block, var, var_len) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+/*
+ * The way windows takes environment variables is different than what C does;
+ * Windows wants a contiguous block of null-terminated strings, terminated
+ * with an additional null.
+ * 
+ * Windows has a few "essential" environment variables. winsock will fail
+ * to initialize if SYSTEMROOT is not defined; some APIs make reference to
+ * TEMP. SYSTEMDRIVE is probably also important. We therefore ensure that
+ * these get defined if the input environment block does not contain any
+ * values for them.
+ */
 wchar_t* make_program_env(char** env_block) {
   wchar_t* dst;
   wchar_t* ptr;
   char** env;
   int env_len = 1 * sizeof(wchar_t); /* room for closing null */
   int len;
+  int i;
+  DWORD var_size;
+  static const wchar_t* required_vars[] = {
+    L"SYSTEMROOT",
+    L"SYSTEMDRIVE",
+    L"TEMP",
+  };
+  static const char* narrow_required_vars[] = {
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "TEMP",
+  };
 
   for (env = env_block; *env; env++) {
     env_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
+  }
+
+  for (i = 0; i < sizeof(required_vars) / sizeof(*required_vars); ++i) {
+    if (!env_block_contains_var(env_block, narrow_required_vars[i])) {
+      env_len += wcslen(required_vars[i]) * sizeof(wchar_t);
+      env_len += wcslen(L"=") * sizeof(wchar_t);
+      var_size = GetEnvironmentVariableW(required_vars[i], NULL, 0);
+      if (var_size == 0) {
+        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
+      }
+      env_len += (int)var_size + sizeof(wchar_t);
+    }
   }
 
   dst = (wchar_t*)malloc(env_len);
@@ -522,6 +569,24 @@ wchar_t* make_program_env(char** env_block) {
     if (!len) {
       free(dst);
       return NULL;
+    }
+  }
+
+  for (i = 0; i < sizeof(required_vars) / sizeof(*required_vars); ++i) {
+    if (!env_block_contains_var(env_block, narrow_required_vars[i])) {
+      wcscpy(ptr, required_vars[i]);
+      ptr += wcslen(required_vars[i]);
+      *ptr++ = L'=';
+      var_size = GetEnvironmentVariableW(required_vars[i], NULL, 0);
+      if (var_size == 0) {
+        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
+      }
+      var_size = GetEnvironmentVariableW(required_vars[i], ptr, var_size);
+      if (var_size == 0) {
+        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
+      }
+      ptr += var_size;
+      *ptr++ = L'\0';
     }
   }
 
